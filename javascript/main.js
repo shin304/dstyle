@@ -235,103 +235,183 @@
       const nextBtn = document.querySelector('.next-btn');
       
       if (championsContainer && prevBtn && nextBtn) {
-        // Calculate scroll amount based on card width
-        const getCardWidth = () => {
-          const card = document.querySelector('.champion-card');
-          const cardStyle = window.getComputedStyle(card);
-          const cardWidth = parseInt(cardStyle.width);
-          const cardMargin = parseInt(cardStyle.marginRight) || 0;
-          return cardWidth + cardMargin + 25; // 25はgapサイズ
+        console.log('Champions scroll system initialized');
+        
+        // カードの基本情報
+        const cardWidth = 330;
+        const gap = 30;
+        const cardStep = cardWidth + gap; // 360px
+        
+        // 総カード数を取得
+        const getTotalCards = () => {
+          const cards = document.querySelectorAll('.champion-card');
+          return cards.length;
         };
         
-        // Scroll to the left
-        prevBtn.addEventListener('click', function() {
-          championsContainer.scrollBy({
-            left: -getCardWidth(),
-            behavior: 'smooth'
-          });
+        // より正確な現在のカードインデックスを取得
+        const getCurrentCardIndex = () => {
+          const scrollLeft = championsContainer.scrollLeft;
+          const containerWidth = championsContainer.clientWidth;
+          const maxScroll = championsContainer.scrollWidth - containerWidth;
+          const totalCards = getTotalCards();
+          
+          // 最大スクロール位置の場合は最後のカード
+          if (scrollLeft >= maxScroll - 10) {
+            console.log(`At max scroll (${scrollLeft}/${maxScroll}), returning last card index: ${totalCards - 1}`);
+            return totalCards - 1;
+          }
+          
+          // 通常の計算
+          const rawIndex = scrollLeft / cardStep;
+          const index = Math.round(rawIndex);
+          const clampedIndex = Math.max(0, Math.min(index, totalCards - 1));
+          
+          console.log(`Scroll: ${scrollLeft}, Raw index: ${rawIndex}, Rounded: ${index}, Final: ${clampedIndex}`);
+          return clampedIndex;
+        };
+        
+        // 強制的に指定したカードにスクロール
+        const forceScrollToCard = (index) => {
+          const totalCards = getTotalCards();
+          const validIndex = Math.max(0, Math.min(index, totalCards - 1));
+          
+          console.log(`Force scrolling to card ${validIndex}/${totalCards - 1}`);
+          
+          if (validIndex === totalCards - 1) {
+            // 最後のカードの場合
+            const maxScroll = championsContainer.scrollWidth - championsContainer.clientWidth;
+            console.log(`Using max scroll position: ${maxScroll}`);
+            championsContainer.scrollLeft = maxScroll;
+          } else {
+            // 通常のカードの場合
+            const targetPosition = validIndex * cardStep;
+            console.log(`Using calculated position: ${targetPosition}`);
+            championsContainer.scrollLeft = targetPosition;
+          }
+          
+          // 念のためsmooth scrollも実行
+          setTimeout(() => {
+            if (validIndex === totalCards - 1) {
+              const maxScroll = championsContainer.scrollWidth - championsContainer.clientWidth;
+              championsContainer.scrollTo({
+                left: maxScroll,
+                behavior: 'smooth'
+              });
+            } else {
+              championsContainer.scrollTo({
+                left: validIndex * cardStep,
+                behavior: 'smooth'
+              });
+            }
+          }, 50);
+        };
+        
+        // 前のカードへ
+        prevBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          console.log('=== PREVIOUS BUTTON CLICKED ===');
+          
+          const currentIndex = getCurrentCardIndex();
+          console.log(`Current index: ${currentIndex}`);
+          
+          if (currentIndex > 0) {
+            const newIndex = currentIndex - 1;
+            console.log(`Moving to previous card: ${currentIndex} -> ${newIndex}`);
+            forceScrollToCard(newIndex);
+          } else {
+            console.log(`Already at first card (${currentIndex}), cannot go back`);
+          }
+          
+          console.log('=== END PREVIOUS CLICK ===');
         });
         
-        // Scroll to the right
-        nextBtn.addEventListener('click', function() {
-          championsContainer.scrollBy({
-            left: getCardWidth(),
-            behavior: 'smooth'
-          });
+        // 次のカードへ
+        nextBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          console.log('=== NEXT BUTTON CLICKED ===');
+          
+          const currentIndex = getCurrentCardIndex();
+          const totalCards = getTotalCards();
+          console.log(`Current index: ${currentIndex}, Total cards: ${totalCards}`);
+          
+          if (currentIndex < totalCards - 1) {
+            const newIndex = currentIndex + 1;
+            console.log(`Moving to next card: ${currentIndex} -> ${newIndex}`);
+            forceScrollToCard(newIndex);
+          } else {
+            console.log(`Already at last card (${currentIndex}), cannot go forward`);
+          }
+          
+          console.log('=== END NEXT CLICK ===');
         });
         
-        // Touch swipe functionality
+        // タッチスワイプ機能
         let touchStartX = 0;
         let touchEndX = 0;
         
         championsContainer.addEventListener('touchstart', function(e) {
           touchStartX = e.changedTouches[0].screenX;
-          stopAutoScroll();
         }, false);
         
         championsContainer.addEventListener('touchend', function(e) {
           touchEndX = e.changedTouches[0].screenX;
-          handleChampionsSwipe();
-          startAutoScroll();
+          const swipeDistance = touchStartX - touchEndX;
+          
+          if (Math.abs(swipeDistance) > 50) {
+            if (swipeDistance > 0) {
+              // 右にスワイプ（次のカードへ）
+              const currentIndex = getCurrentCardIndex();
+              const totalCards = getTotalCards();
+              if (currentIndex < totalCards - 1) {
+                forceScrollToCard(currentIndex + 1);
+              }
+            } else {
+              // 左にスワイプ（前のカードへ）
+              const currentIndex = getCurrentCardIndex();
+              if (currentIndex > 0) {
+                forceScrollToCard(currentIndex - 1);
+              }
+            }
+          }
         }, false);
         
-        function handleChampionsSwipe() {
-          // スワイプの距離がある程度あれば処理（誤タッチ防止）
-          if (touchStartX - touchEndX > 70) {
-            // 右にスワイプ
-            championsContainer.scrollBy({
-              left: getCardWidth(),
-              behavior: 'smooth'
-            });
-          } else if (touchEndX - touchStartX > 70) {
-            // 左にスワイプ
-            championsContainer.scrollBy({
-              left: -getCardWidth(),
-              behavior: 'smooth'
-            });
-          }
-        }
+        // ウィンドウリサイズ時の調整
+        window.addEventListener('resize', function() {
+          const currentIndex = getCurrentCardIndex();
+          setTimeout(() => {
+            forceScrollToCard(currentIndex);
+          }, 100);
+        });
         
-        // Auto scroll functionality
-        let autoScrollInterval;
+        // 初期位置設定とデバッグ情報
+        setTimeout(() => {
+          const totalCards = getTotalCards();
+          const containerWidth = championsContainer.clientWidth;
+          const scrollWidth = championsContainer.scrollWidth;
+          
+          console.log(`=== Champions Debug Info ===`);
+          console.log(`Total cards: ${totalCards}`);
+          console.log(`Container width: ${containerWidth}`);
+          console.log(`Scroll width: ${scrollWidth}`);
+          console.log(`Max scroll: ${scrollWidth - containerWidth}`);
+          console.log(`Card step: ${cardStep}`);
+          console.log(`Cards per step: ${scrollWidth / cardStep}`);
+          console.log(`============================`);
+          
+          forceScrollToCard(0);
+        }, 100);
         
-        const startAutoScroll = () => {
-          // 5秒ごとに自動スクロール
-          autoScrollInterval = setInterval(() => {
-            // 最大スクロール位置を計算
-            const maxScrollLeft = championsContainer.scrollWidth - championsContainer.clientWidth;
-            
-            // 現在のスクロール位置が最大位置に近い場合、最初に戻る
-            if (championsContainer.scrollLeft >= maxScrollLeft - 10) {
-              championsContainer.scrollTo({
-                left: 0,
-                behavior: 'smooth'
-              });
-            } else {
-              // 次のカードにスクロール
-              championsContainer.scrollBy({
-                left: getCardWidth(),
-                behavior: 'smooth'
-              });
-            }
-          }, 5000);
+        // デバッグ用：現在の状態を表示
+        window.debugChampions = () => {
+          const currentIndex = getCurrentCardIndex();
+          const scrollLeft = championsContainer.scrollLeft;
+          const maxScroll = championsContainer.scrollWidth - championsContainer.clientWidth;
+          
+          console.log(`=== Current State ===`);
+          console.log(`Current index: ${currentIndex}`);
+          console.log(`Scroll position: ${scrollLeft}`);
+          console.log(`Max scroll: ${maxScroll}`);
+          console.log(`==================`);
         };
-        
-        const stopAutoScroll = () => {
-          clearInterval(autoScrollInterval);
-        };
-        
-        // マウスオーバー時は自動スクロールを停止
-        championsContainer.addEventListener('mouseenter', stopAutoScroll);
-        championsContainer.addEventListener('mouseleave', startAutoScroll);
-        
-        // スクロールボタンマウスオーバー時も自動スクロールを停止
-        prevBtn.addEventListener('mouseenter', stopAutoScroll);
-        prevBtn.addEventListener('mouseleave', startAutoScroll);
-        nextBtn.addEventListener('mouseenter', stopAutoScroll);
-        nextBtn.addEventListener('mouseleave', startAutoScroll);
-        
-        // 初期状態で自動スクロールを開始
-        startAutoScroll();
       }
     });
